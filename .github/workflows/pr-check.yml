@@ -1,0 +1,49 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-bat:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check BAT syntax
+        run: |
+          cmd /c "call warp-tunnel-hosts.bat /?"
+        continue-on-error: true
+
+      - name: Check for common BAT issues
+        shell: pwsh
+        run: |
+          $file = Get-Content -Path "warp-tunnel-hosts.bat" -Raw -Encoding UTF8
+          $errors = @()
+
+          # Проверка на парные скобки
+          $opens = [regex]::Matches($file, '\(').Count
+          $closes = [regex]::Matches($file, '\)').Count
+          if ($opens -ne $closes) {
+            $errors += "Mismatched parentheses: ( = $opens, ) = $closes"
+          }
+
+          # Проверка на парные кавычки
+          $quotes = [regex]::Matches($file, '"').Count
+          if ($quotes % 2 -ne 0) {
+            $errors += "Mismatched double quotes: $quotes (should be even)"
+          }
+
+          # Проверка на наличие @echo off
+          if ($file -notmatch '@echo off') {
+            $errors += "Missing '@echo off' at the beginning"
+          }
+
+          if ($errors.Count -gt 0) {
+            Write-Host "Found issues:"
+            $errors | ForEach-Object { Write-Host "  - $_" }
+            exit 1
+          } else {
+            Write-Host "All checks passed"
+          }
